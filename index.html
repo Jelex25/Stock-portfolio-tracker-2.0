@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Portfolio Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #333;
+        }
+        .tab-button.active {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4f46e5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 80%;
+            max-width: 500px;
+            text-align: center;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="messageModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <p id="modalMessage" class="text-lg font-semibold mb-4"></p>
+            <button class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700" onclick="document.getElementById('messageModal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <h1 class="text-3xl font-bold text-center text-indigo-700 mb-6">Stock Portfolio Tracker</h1>
+
+        <div class="flex justify-between items-center mb-6">
+            <div class="text-sm text-gray-600">
+                User ID: <span id="userIdDisplay" class="font-semibold text-indigo-600">Loading...</span>
+            </div>
+            <div class="text-sm text-gray-600">
+                <span id="refreshStatus" class="font-semibold"></span>
+            </div>
+        </div>
+
+        <nav class="flex space-x-2 md:space-x-4 mb-6 overflow-x-auto pb-2">
+            <button class="tab-button px-4 py-2 rounded-md text-sm md:text-base font-medium transition-colors duration-200 active" data-tab="dynamic">Dynamic View</button>
+            <button class="tab-button px-4 py-2 rounded-md text-sm md:text-base font-medium transition-colors duration-200" data-tab="daily-close">Daily Close</button>
+            <button class="tab-button px-4 py-2 rounded-md text-sm md:text-base font-medium transition-colors duration-200" data-tab="profitability">Profitability Tracker</button>
+            <button class="tab-button px-4 py-2 rounded-md text-sm md:text-base font-medium transition-colors duration-200" data-tab="summary">Summary Table</button>
+            <button class="tab-button px-4 py-2 rounded-md text-sm md:text-base font-medium transition-colors duration-200" data-tab="editor">Portfolio Editor</button>
+        </nav>
+
+        <div id="tab-content" class="min-h-[400px]">
+            <!-- Dynamic View Tab -->
+            <div id="dynamic-tab" class="tab-pane active">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Dynamic Portfolio View (Live Prices)</h2>
+                <div id="dynamic-loading" class="flex justify-center items-center h-48">
+                    <div class="loading-spinner"></div>
+                    <p class="ml-3 text-gray-600">Fetching live data...</p>
+                </div>
+                <div id="dynamic-data" class="overflow-x-auto hidden">
+                    <table class="min-w-full bg-white rounded-lg shadow-sm">
+                        <thead>
+                            <tr class="bg-indigo-100 text-indigo-800 uppercase text-sm leading-normal">
+                                <th class="py-3 px-6 text-left rounded-tl-lg">Ticker</th>
+                                <th class="py-3 px-6 text-left">Quantity</th>
+                                <th class="py-3 px-6 text-left">Cost Basis</th>
+                                <th class="py-3 px-6 text-left">Current Price</th>
+                                <th class="py-3 px-6 text-left">Current Value</th>
+                                <th class="py-3 px-6 text-left rounded-tr-lg">Unrealized P/L</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dynamic-table-body" class="text-gray-700 text-sm font-light">
+                            <!-- Data will be inserted here -->
+                        </tbody>
+                    </table>
+                    <div class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-800">
+                        <p class="font-semibold">Total Portfolio Value: <span id="dynamic-total-value"></span></p>
+                        <p class="font-semibold">Total Unrealized P/L: <span id="dynamic-total-pl"></span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily Close Tab -->
+            <div id="daily-close-tab" class="tab-pane hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Daily Close View (Historical Snapshot)</h2>
+                <div class="mb-4">
+                    <label for="closeDate" class="block text-gray-700 text-sm font-bold mb-2">Select Date:</label>
+                    <input type="date" id="closeDate" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <button id="fetchCloseData" class="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors duration-200">Fetch Data for Date</button>
+                </div>
+                <div id="daily-close-loading" class="flex justify-center items-center h-48 hidden">
+                    <div class="loading-spinner"></div>
+                    <p class="ml-3 text-gray-600">Fetching historical data...</p>
+                </div>
+                <div id="daily-close-data" class="overflow-x-auto hidden">
+                    <table class="min-w-full bg-white rounded-lg shadow-sm">
+                        <thead>
+                            <tr class="bg-indigo-100 text-indigo-800 uppercase text-sm leading-normal">
+                                <th class="py-3 px-6 text-left rounded-tl-lg">Ticker</th>
+                                <th class="py-3 px-6 text-left">Quantity</th>
+                                <th class="py-3 px-6 text-left">Cost Basis</th>
+                                <th class="py-3 px-6 text-left">Close Price</th>
+                                <th class="py-3 px-6 text-left">Value at Close</th>
+                                <th class="py-3 px-6 text-left rounded-tr-lg">Unrealized P/L at Close</th>
+                            </tr>
+                        </thead>
+                        <tbody id="daily-close-table-body" class="text-gray-700 text-sm font-light">
+                            <!-- Data will be inserted here -->
+                        </tbody>
+                    </table>
+                    <div class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-800">
+                        <p class="font-semibold">Total Portfolio Value (Close): <span id="daily-close-total-value"></span></p>
+                        <p class="font-semibold">Total Unrealized P/L (Close): <span id="daily-close-total-pl"></span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profitability Tracker Tab -->
+            <div id="profitability-tab" class="tab-pane hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Profitability Tracker</h2>
+                <p class="text-gray-600 mb-4">This section will display realized and unrealized profits/losses. Realized P/L is calculated on closed positions (sells), and unrealized P/L is based on current market value vs. cost basis for open positions.</p>
+                <div class="mb-4">
+                    <label for="profitabilityStartDate" class="block text-gray-700 text-sm font-bold mb-2">Start Date:</label>
+                    <input type="date" id="profitabilityStartDate" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+                <div class="mb-4">
+                    <label for="profitabilityEndDate" class="block text-gray-700 text-sm font-bold mb-2">End Date:</label>
+                    <input type="date" id="profitabilityEndDate" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                </div>
+                <button id="calculateProfitability" class="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors duration-200">Calculate Profitability</button>
+
+                <div id="profitability-loading" class="flex justify-center items-center h-48 hidden">
+                    <div class="loading-spinner"></div>
+                    <p class="ml-3 text-gray-600">Calculating profitability...</p>
+                </div>
+
+                <div id="profitability-results" class="hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-green-100 p-4 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold text-green-800">Total Realized P/L</h3>
+                            <p id="totalRealizedPL" class="text-2xl font-bold text-green-700">$0.00</p>
+                        </div>
+                        <div class="bg-blue-100 p-4 rounded-lg shadow-sm">
+                            <h3 class="text-lg font-semibold text-blue-800">Total Unrealized P/L (Current)</h3>
+                            <p id="totalUnrealizedPL" class="text-2xl font-bold text-blue-700">$0.00</p>
+                        </div>
+                    </div>
+
+                    <h3 class="text-xl font-semibold text-gray-800 mb-3">Realized Trades</h3>
+                    <div id="realized-trades-table" class="overflow-x-auto">
+                        <table class="min-w-full bg-white rounded-lg shadow-sm">
+                            <thead>
+                                <tr class="bg-indigo-100 text-indigo-800 uppercase text-sm leading-normal">
+                                    <th class="py-3 px-6 text-left rounded-tl-lg">Ticker</th>
+                                    <th class="py-3 px-6 text-left">Buy Date</th>
+                                    <th class="py-3 px-6 text-left">Sell Date</th>
+                                    <th class="py-3 px-6 text-left">Quantity</th>
+                                    <th class="py-3 px-6 text-left">Buy Price</th>
+                                    <th class="py-3 px-6 text-left">Sell Price</th>
+                                    <th class="py-3 px-6 text-left rounded-tr-lg">P/L</th>
+                                </tr>
+                            </thead>
+                            <tbody id="realized-trades-body" class="text-gray-700 text-sm font-light">
+                                <!-- Realized trades will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Table Tab -->
+            <div id="summary-tab" class="tab-pane hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Daily Summary Table</h2>
+                <p class="text-gray-600 mb-4">This table will show daily aggregated portfolio values and gains/losses, appended automatically at market close.</p>
+                <div id="summary-loading" class="flex justify-center items-center h-48 hidden">
+                    <div class="loading-spinner"></div>
+                    <p class="ml-3 text-gray-600">Fetching summary data...</p>
+                </div>
+                <div id="summary-data" class="overflow-x-auto hidden">
+                    <table class="min-w-full bg-white rounded-lg shadow-sm">
+                        <thead>
+                            <tr class="bg-indigo-100 text-indigo-800 uppercase text-sm leading-normal">
+                                <th class="py-3 px-6 text-left rounded-tl-lg">Date</th>
+                                <th class="py-3 px-6 text-left">Portfolio Value</th>
+                                <th class="py-3 px-6 text-left">Daily P/L ($)</th>
+                                <th class="py-3 px-6 text-left">Daily P/L (%)</th>
+                                <th class="py-3 px-6 text-left">Monthly P/L (%)</th>
+                                <th class="py-3 px-6 text-left rounded-tr-lg">Annual P/L (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summary-table-body" class="text-gray-700 text-sm font-light">
+                            <!-- Summary data will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Portfolio Editor Tab -->
+            <div id="editor-tab" class="tab-pane hidden">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Portfolio Editor (Add/Edit Holdings)</h2>
+                <form id="portfolioForm" class="bg-gray-50 p-6 rounded-lg shadow-inner mb-6">
+                    <input type="hidden" id="transactionId">
+                    <div class="mb-4">
+                        <label for="transactionType" class="block text-gray-700 text-sm font-bold mb-2">Transaction Type:</label>
+                        <select id="transactionType" class="shadow border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                            <option value="">Select Type</option>
+                            <option value="Buy">Buy</option>
+                            <option value="Sell">Sell</option>
+                            <option value="Carry Over">Carry Over (Initial Holding)</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="ticker" class="block text-gray-700 text-sm font-bold mb-2">Ticker Symbol:</label>
+                        <input type="text" id="ticker" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline uppercase" placeholder="e.g., MSFT" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="quantity" class="block text-gray-700 text-sm font-bold mb-2">Quantity:</label>
+                        <input type="number" id="quantity" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" min="1" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="price" class="block text-gray-700 text-sm font-bold mb-2">Price Per Share:</label>
+                        <input type="number" id="price" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" step="0.01" min="0.01" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="transactionDate" class="block text-gray-700 text-sm font-bold mb-2">Transaction Date:</label>
+                        <input type="date" id="transactionDate" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+                    </div>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors duration-200">Save Transaction</button>
+                    <button type="button" id="clearForm" class="ml-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors duration-200">Clear Form</button>
+                </form>
+
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">Current Transactions</h3>
+                <div id="transactions-loading" class="flex justify-center items-center h-48">
+                    <div class="loading-spinner"></div>
+                    <p class="ml-3 text-gray-600">Loading transactions...</p>
+                </div>
+                <div id="transactions-list" class="overflow-x-auto hidden">
+                    <table class="min-w-full bg-white rounded-lg shadow-sm">
+                        <thead>
+                            <tr class="bg-indigo-100 text-indigo-800 uppercase text-sm leading-normal">
+                                <th class="py-3 px-6 text-left rounded-tl-lg">Type</th>
+                                <th class="py-3 px-6 text-left">Ticker</th>
+                                <th class="py-3 px-6 text-left">Quantity</th>
+                                <th class="py-3 px-6 text-left">Price</th>
+                                <th class="py-3 px-6 text-left">Date</th>
+                                <th class="py-3 px-6 text-center rounded-tr-lg">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions-table-body" class="text-gray-700 text-sm font-light">
+                            <!-- Transactions will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Global Variables from Canvas Environment ---
+        // These are provided by the Canvas environment. If running locally, you'd define them manually.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- Firebase Initialization ---
+        let app;
+        let db;
+        let auth;
+        let currentUserId = null;
+        let portfolioTransactionsRef;
+        let dailySummariesRef;
+
+        const messageModal = document.getElementById('messageModal');
+        const modalMessage = document.getElementById('modalMessage');
+        document.querySelector('#messageModal .close-button').onclick = () => messageModal.style.display = 'none';
+
+        function showMessage(message) {
+            modalMessage.textContent = message;
+            messageModal.style.display = 'flex';
+        }
+
+        async function initializeFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length === 0) {
+                    showMessage("Firebase config not found. Running in a limited mode without persistence. Please ensure __firebase_config is set.");
+                    return;
+                }
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Authenticate user
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        document.getElementById('userIdDisplay').textContent = currentUserId;
+                        portfolioTransactionsRef = collection(db, `artifacts/${appId}/users/${currentUserId}/portfolioTransactions`);
+                        dailySummariesRef = collection(db, `artifacts/${appId}/users/${currentUserId}/dailySummaries`);
+                        setupListeners(); // Setup Firestore listeners once authenticated
+                        showMessage("Firebase initialized and user authenticated.");
+                    } else {
+                        currentUserId = crypto.randomUUID(); // Fallback for unauthenticated users (not ideal for multi-user)
+                        document.getElementById('userIdDisplay').textContent = currentUserId + " (Anonymous)";
+                        showMessage("Signed in anonymously. Data will be private to this session on this device.");
+                    }
+                });
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                showMessage("Failed to initialize Firebase: " + error.message);
+            }
+        }
+
+        // --- Alpha Vantage API Configuration ---
+        const ALPHA_VANTAGE_API_KEY = 'YOUR_ALPHA_VANTAGE_API_KEY'; // Replace with your actual API Key!
+        const BASE_URL = 'https://www.alphavantage.co/query';
+        const REFRESH_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+        let refreshIntervalId;
+
+        // --- Helper Functions ---
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+        }
+
+        function formatPercentage(value) {
+            return new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+        }
+
+        // Updated showLoading and hideLoading to accept specific IDs for loading and data elements
+        function showLoading(loadingElementId, dataElementId) {
+            document.getElementById(loadingElementId).classList.remove('hidden');
+            document.getElementById(dataElementId).classList.add('hidden');
+        }
+
+        function hideLoading(loadingElementId, dataElementId) {
+            document.getElementById(loadingElementId).classList.add('hidden');
+            document.getElementById(dataElementId).classList.remove('hidden');
+        }
+
+        // --- Time Zone Handling for EST (Crucial for refresh logic) ---
+        // Note: Client-side time zone handling can be tricky due to user's local settings.
+        // For production, server-side time zone handling is more robust.
+        function isESTTradingHours() {
+            const now = new Date();
+            // Convert current time to EST
+            // Use 'America/New_York' for EST. This requires Intl.DateTimeFormat with options.
+            const estTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            const estHour = estTime.getHours();
+            const estMinute = estTime.getMinutes();
+
+            // Client's requested hours: 6:00 AM EST to 8:00 PM EST
+            const startHour = 6;
+            const endHour = 20; // 8 PM
+
+            const isInHours = (estHour >= startHour && estHour < endHour) ||
+                             (estHour === endHour && estMinute === 0); // Allow 8 PM sharp
+
+            document.getElementById('refreshStatus').textContent = `Current EST: ${estTime.toLocaleTimeString()} - ${isInHours ? 'Active' : 'Inactive'} refresh`;
+            return isInHours;
+        }
+
+        // --- Alpha Vantage Data Fetching ---
+        async function fetchLivePrice(ticker) {
+            if (!ALPHA_VANTAGE_API_KEY || ALPHA_VANTAGE_API_KEY === 'YOUR_ALPHA_VANTAGE_API_KEY') {
+                console.warn("Alpha Vantage API key not set. Live data will not be fetched.");
+                showMessage("Alpha Vantage API key not set. Please update the code.");
+                return null;
+            }
+            const url = `${BASE_URL}?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data['Global Quote'] && data['Global Quote']['05. price']) {
+                    return parseFloat(data['Global Quote']['05. price']);
+                } else if (data['Error Message']) {
+                    console.error(`Alpha Vantage Error for ${ticker}:`, data['Error Message']);
+                    showMessage(`Alpha Vantage Error for ${ticker}: ${data['Error Message']}`);
+                    return null;
+                } else if (data['Note']) {
+                    console.warn(`Alpha Vantage Note for ${ticker}:`, data['Note']);
+                    // Show message only if it's a rate limit warning
+                    if (data['Note'].includes('thank you for your interest in Alpha Vantage')) {
+                        showMessage(`Alpha Vantage API rate limit reached. Please wait or upgrade your plan.`);
+                    }
+                    return null;
+                }
+                return null;
+            } catch (error) {
+                console.error(`Error fetching live price for ${ticker}:`, error);
+                showMessage(`Error fetching live price for ${ticker}: ${error.message}`);
+                return null;
+            }
+        }
+
+        async function fetchEODPrice(ticker, date) {
+            if (!ALPHA_VANTAGE_API_KEY || ALPHA_VANTAGE_API_KEY === 'YOUR_ALPHA_VANTAGE_API_KEY') {
+                console.warn("Alpha Vantage API key not set. EOD data will not be fetched.");
+                showMessage("Alpha Vantage API key not set. Please update the code.");
+                return null;
+            }
+            // Alpha Vantage TIME_SERIES_DAILY provides daily OHLCV. We need to parse it for the specific date.
+            const url = `${BASE_URL}?function=TIME_SERIES_DAILY&symbol=${ticker}&apikey=${ALPHA_VANTAGE_API_KEY}`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data['Time Series (Daily)']) {
+                    const dailyData = data['Time Series (Daily)'][date];
+                    if (dailyData && dailyData['4. close']) {
+                        return parseFloat(dailyData['4. close']);
+                    }
+                } else if (data['Error Message']) {
+                    console.error(`Alpha Vantage Error for EOD ${ticker} on ${date}:`, data['Error Message']);
+                    showMessage(`Alpha Vantage Error for EOD ${ticker} on ${date}: ${data['Error Message']}`);
+                    return null;
+                } else if (data['Note']) {
+                    console.warn(`Alpha Vantage Note for EOD ${ticker} on ${date}:`, data['Note']);
+                    if (data['Note'].includes('thank you for your interest in Alpha Vantage')) {
+                        showMessage(`Alpha Vantage API rate limit reached for EOD data. Please wait or upgrade your plan.`);
+                    }
+                    return null;
+                }
+                return null; // Date not found or other issue
+            } catch (error) {
+                console.error(`Error fetching EOD price for ${ticker} on ${date}:`, error);
+                showMessage(`Error fetching EOD price for ${ticker} on ${date}: ${error.message}`);
+                return null;
+            }
+        }
+
+        // --- Portfolio Data Management (Firestore) ---
+        let portfolioTransactions = []; // In-memory cache of transactions
+
+        async function saveTransaction(transaction) {
+            if (!currentUserId || !portfolioTransactionsRef) {
+                showMessage("Firebase not initialized or user not authenticated. Cannot save transaction.");
+                return;
+            }
+            try {
+                if (transaction.id) { // Existing transaction (for update)
+                    const docRef = doc(db, `artifacts/${appId}/users/${currentUserId}/portfolioTransactions`, transaction.id);
+                    await setDoc(docRef, transaction, { merge: true });
+                    showMessage("Transaction updated successfully!");
+                } else { // New transaction
+                    await addDoc(portfolioTransactionsRef, transaction);
+                    showMessage("Transaction added successfully!");
+                }
+                // onSnapshot will automatically update the local array and UI
+            } catch (e) {
+                console.error("Error saving transaction: ", e);
+                showMessage("Error saving transaction: " + e.message);
+            }
+        }
+
+        async function deleteTransaction(id) {
+            if (!currentUserId || !portfolioTransactionsRef) {
+                showMessage("Firebase not initialized or user not authenticated. Cannot delete transaction.");
+                return;
+            }
+            try {
+                await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/portfolioTransactions`, id));
+                showMessage("Transaction deleted successfully!");
+                // onSnapshot will automatically update the local array and UI
+            } catch (e) {
+                console.error("Error deleting transaction: ", e);
+                showMessage("Error deleting transaction: " + e.message);
+            }
+        }
+
+        function setupListeners() {
+            if (!portfolioTransactionsRef) return;
+
+            // Listen for real-time updates to portfolio transactions
+            onSnapshot(portfolioTransactionsRef, (snapshot) => {
+                portfolioTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                portfolioTransactions.sort((a, b) => new Date(a.transactionDate) - new Date(b.transactionDate)); // Sort by date
+                console.log("Portfolio transactions updated:", portfolioTransactions);
+                renderPortfolioEditor(); // Re-render editor list
+                // Re-render active tab if it depends on portfolio data
+                const activeTab = document.querySelector('.tab-button.active').dataset.tab;
+                if (activeTab === 'dynamic') renderDynamicView();
+                if (activeTab === 'profitability') renderProfitabilityTracker(); // Re-calculate if needed
+            }, (error) => {
+                console.error("Error listening to transactions:", error);
+                showMessage("Error loading transactions: " + error.message);
+            });
+
+            // Listen for real-time updates to daily summaries (if implemented)
+            if (dailySummariesRef) {
+                onSnapshot(dailySummariesRef, (snapshot) => {
+                    const dailySummaries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    dailySummaries.sort((a, b) => new Date(a.date) - new Date(b.date));
+                    console.log("Daily summaries updated:", dailySummaries);
+                    renderSummaryTable(dailySummaries);
+                }, (error) => {
+                    console.error("Error listening to daily summaries:", error);
+                });
+            }
+        }
+
+        // --- UI Rendering Functions ---
+
+        async function renderDynamicView() {
+            showLoading('dynamic-loading', 'dynamic-data'); // Pass both IDs
+            const tbody = document.getElementById('dynamic-table-body');
+            tbody.innerHTML = ''; // Clear previous data
+
+            let totalPortfolioValue = 0;
+            let totalUnrealizedPL = 0;
+
+            const currentHoldings = calculateCurrentHoldings(); // Get net holdings from transactions
+
+            const fetchPromises = Object.keys(currentHoldings).map(async ticker => {
+                const holding = currentHoldings[ticker];
+                const livePrice = await fetchLivePrice(ticker);
+
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-200 hover:bg-gray-100';
+
+                let currentValue = 0;
+                let unrealizedPL = 0;
+                if (livePrice !== null) {
+                    currentValue = holding.quantity * livePrice;
+                    unrealizedPL = (livePrice - holding.avgCostBasis) * holding.quantity;
+                    totalPortfolioValue += currentValue;
+                    totalUnrealizedPL += unrealizedPL;
+                }
+
+                row.innerHTML = `
+                    <td class="py-3 px-6 text-left whitespace-nowrap font-medium">${ticker}</td>
+                    <td class="py-3 px-6 text-left">${holding.quantity}</td>
+                    <td class="py-3 px-6 text-left">${formatCurrency(holding.avgCostBasis)}</td>
+                    <td class="py-3 px-6 text-left">${livePrice !== null ? formatCurrency(livePrice) : 'N/A'}</td>
+                    <td class="py-3 px-6 text-left">${formatCurrency(currentValue)}</td>
+                    <td class="py-3 px-6 text-left ${unrealizedPL >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(unrealizedPL)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            await Promise.all(fetchPromises);
+
+            document.getElementById('dynamic-total-value').textContent = formatCurrency(totalPortfolioValue);
+            document.getElementById('dynamic-total-pl').textContent = formatCurrency(totalUnrealizedPL);
+            hideLoading('dynamic-loading', 'dynamic-data'); // Pass both IDs
+        }
+
+        async function renderDailyCloseView(date) {
+            if (!date) {
+                showMessage("Please select a date for the Daily Close view.");
+                return;
+            }
+            showLoading('daily-close-loading', 'daily-close-data'); // Pass both IDs
+            const tbody = document.getElementById('daily-close-table-body');
+            tbody.innerHTML = ''; // Clear previous data
+
+            let totalPortfolioValueAtClose = 0;
+            let totalUnrealizedPLAtClose = 0;
+
+            const currentHoldings = calculateCurrentHoldingsAsOfDate(date); // Get holdings as of selected date
+
+            const fetchPromises = Object.keys(currentHoldings).map(async ticker => {
+                const holding = currentHoldings[ticker];
+                const eodPrice = await fetchEODPrice(ticker, date);
+
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-200 hover:bg-gray-100';
+
+                let valueAtClose = 0;
+                let unrealizedPLAtClose = 0;
+                if (eodPrice !== null) {
+                    valueAtClose = holding.quantity * eodPrice;
+                    unrealizedPLAtClose = (eodPrice - holding.avgCostBasis) * holding.quantity;
+                    totalPortfolioValueAtClose += valueAtClose;
+                    totalUnrealizedPLAtClose += unrealizedPLAtClose;
+                }
+
+                row.innerHTML = `
+                    <td class="py-3 px-6 text-left whitespace-nowrap font-medium">${ticker}</td>
+                    <td class="py-3 px-6 text-left">${holding.quantity}</td>
+                    <td class="py-3 px-6 text-left">${formatCurrency(holding.avgCostBasis)}</td>
+                    <td class="py-3 px-6 text-left">${eodPrice !== null ? formatCurrency(eodPrice) : 'N/A'}</td>
+                    <td class="py-3 px-6 text-left">${formatCurrency(valueAtClose)}</td>
+                    <td class="py-3 px-6 text-left ${unrealizedPLAtClose >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(unrealizedPLAtClose)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            await Promise.all(fetchPromises);
+
+            document.getElementById('daily-close-total-value').textContent = formatCurrency(totalPortfolioValueAtClose);
+            document.getElementById('daily-close-total-pl').textContent = formatCurrency(totalUnrealizedPLAtClose);
+            hideLoading('daily-close-loading', 'daily-close-data'); // Pass both IDs
+        }
+
+        async function renderProfitabilityTracker() {
+            showLoading('profitability-loading', 'profitability-results'); // Pass both IDs
+            const startDate = document.getElementById('profitabilityStartDate').value;
+            const endDate = document.getElementById('profitabilityEndDate').value;
+
+            if (!startDate || !endDate) {
+                showMessage("Please select both start and end dates for profitability calculation.");
+                hideLoading('profitability-loading', 'profitability-results'); // Pass both IDs
+                return;
+            }
+
+            const startMoment = new Date(startDate);
+            const endMoment = new Date(endDate);
+            endMoment.setDate(endMoment.getDate() + 1); // Include the end date
+
+            let totalRealizedPL = 0;
+            const realizedTrades = [];
+
+            // Simple FIFO for realized P/L calculation (can be complex for real-world scenarios)
+            const holdingsMap = new Map(); // To track cost basis for FIFO
+
+            portfolioTransactions.forEach(t => {
+                const transactionDate = new Date(t.transactionDate);
+                if (transactionDate >= startMoment && transactionDate < endMoment) {
+                    if (t.transactionType === 'Buy' || t.transactionType === 'Carry Over') {
+                        const current = holdingsMap.get(t.ticker) || { quantity: 0, cost: 0, transactions: [] };
+                        current.quantity += t.quantity;
+                        current.cost += t.quantity * t.price;
+                        current.transactions.push({ quantity: t.quantity, price: t.price, date: t.transactionDate });
+                        holdingsMap.set(t.ticker, current);
+                    } else if (t.transactionType === 'Sell') {
+                        let soldQuantity = t.quantity;
+                        const current = holdingsMap.get(t.ticker);
+
+                        if (current && current.quantity >= soldQuantity) {
+                            let buyCost = 0;
+                            let soldValue = soldQuantity * t.price;
+
+                            // FIFO logic
+                            while (soldQuantity > 0 && current.transactions.length > 0) {
+                                const oldestBuy = current.transactions[0];
+                                if (oldestBuy.quantity <= soldQuantity) {
+                                    buyCost += oldestBuy.quantity * oldestBuy.price;
+                                    soldQuantity -= oldestBuy.quantity;
+                                    current.transactions.shift();
+                                } else {
+                                    buyCost += soldQuantity * oldestBuy.price;
+                                    oldestBuy.quantity -= soldQuantity;
+                                    soldQuantity = 0;
+                                }
+                            }
+                            const realizedPL = soldValue - buyCost;
+                            totalRealizedPL += realizedPL;
+                            realizedTrades.push({
+                                ticker: t.ticker,
+                                buyDate: 'N/A (FIFO calc)', // More complex to track exact buy date for FIFO
+                                sellDate: t.transactionDate,
+                                quantity: t.quantity,
+                                buyPrice: buyCost / t.quantity, // Avg buy price for this sell
+                                sellPrice: t.price,
+                                pl: realizedPL
+                            });
+                            current.quantity -= t.quantity;
+                            current.cost -= buyCost; // Adjust total cost
+                            holdingsMap.set(t.ticker, current);
+                        } else {
+                            // Handle selling more than owned or no prior buys
+                            console.warn(`Attempted to sell ${t.quantity} of ${t.ticker} but only ${current ? current.quantity : 0} owned.`);
+                            showMessage(`Warning: Sold ${t.quantity} of ${t.ticker} but only ${current ? current.quantity : 0} owned in calculation. Realized P/L may be inaccurate.`);
+                        }
+                    }
+                }
+            });
+
+            // Calculate current unrealized P/L for open positions
+            let totalUnrealizedPL = 0;
+            const currentHoldings = calculateCurrentHoldings(); // Get net holdings from transactions
+            const fetchPromises = Object.keys(currentHoldings).map(async ticker => {
+                const holding = currentHoldings[ticker];
+                if (holding.quantity > 0) { // Only for open positions
+                    const livePrice = await fetchLivePrice(ticker);
+                    if (livePrice !== null) {
+                        totalUnrealizedPL += (livePrice - holding.avgCostBasis) * holding.quantity;
+                    }
+                }
+            });
+            await Promise.all(fetchPromises);
+
+            document.getElementById('totalRealizedPL').textContent = formatCurrency(totalRealizedPL);
+            document.getElementById('totalUnrealizedPL').textContent = formatCurrency(totalUnrealizedPL);
+
+            const realizedTradesBody = document.getElementById('realized-trades-body');
+            realizedTradesBody.innerHTML = '';
+            if (realizedTrades.length === 0) {
+                realizedTradesBody.innerHTML = '<tr><td colspan="7" class="py-3 px-6 text-center">No realized trades in this period.</td></tr>';
+            } else {
+                realizedTrades.forEach(trade => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-200 hover:bg-gray-100';
+                    row.innerHTML = `
+                        <td class="py-3 px-6 text-left">${trade.ticker}</td>
+                        <td class="py-3 px-6 text-left">${trade.buyDate}</td>
+                        <td class="py-3 px-6 text-left">${trade.sellDate}</td>
+                        <td class="py-3 px-6 text-left">${trade.quantity}</td>
+                        <td class="py-3 px-6 text-left">${formatCurrency(trade.buyPrice)}</td>
+                        <td class="py-3 px-6 text-left">${formatCurrency(trade.sellPrice)}</td>
+                        <td class="py-3 px-6 text-left ${trade.pl >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(trade.pl)}</td>
+                    `;
+                    realizedTradesBody.appendChild(row);
+                });
+            }
+
+            hideLoading('profitability-loading', 'profitability-results'); // Pass both IDs
+        }
+
+        function renderSummaryTable(dailySummaries) {
+            showLoading('summary-loading', 'summary-data'); // Pass both IDs
+            const tbody = document.getElementById('summary-table-body');
+            tbody.innerHTML = '';
+
+            if (dailySummaries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="py-3 px-6 text-center">No daily summaries available.</td></tr>';
+            } else {
+                dailySummaries.forEach(summary => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-200 hover:bg-gray-100';
+                    row.innerHTML = `
+                        <td class="py-3 px-6 text-left">${summary.date}</td>
+                        <td class="py-3 px-6 text-left">${formatCurrency(summary.portfolioValue)}</td>
+                        <td class="py-3 px-6 text-left ${summary.dailyPL >= 0 ? 'text-green-600' : 'text-red-600'}">${formatCurrency(summary.dailyPL)}</td>
+                        <td class="py-3 px-6 text-left ${summary.dailyPLPerc >= 0 ? 'text-green-600' : 'text-red-600'}">${formatPercentage(summary.dailyPLPerc)}</td>
+                        <td class="py-3 px-6 text-left ${summary.monthlyPLPerc >= 0 ? 'text-green-600' : 'text-red-600'}">${formatPercentage(summary.monthlyPLPerc)}</td>
+                        <td class="py-3 px-6 text-left ${summary.annualPLPerc >= 0 ? 'text-green-600' : 'text-red-600'}">${formatPercentage(summary.annualPLPerc)}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+            hideLoading('summary-loading', 'summary-data'); // Pass both IDs
+        }
+
+        function renderPortfolioEditor() {
+            showLoading('transactions-loading', 'transactions-list'); // Pass both IDs
+            const tbody = document.getElementById('transactions-table-body');
+            tbody.innerHTML = '';
+
+            if (portfolioTransactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="py-3 px-6 text-center">No transactions added yet.</td></tr>';
+            } else {
+                portfolioTransactions.forEach(t => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b border-gray-200 hover:bg-gray-100';
+                    row.innerHTML = `
+                        <td class="py-3 px-6 text-left">${t.transactionType}</td>
+                        <td class="py-3 px-6 text-left">${t.ticker}</td>
+                        <td class="py-3 px-6 text-left">${t.quantity}</td>
+                        <td class="py-3 px-6 text-left">${formatCurrency(t.price)}</td>
+                        <td class="py-3 px-6 text-left">${t.transactionDate}</td>
+                        <td class="py-3 px-6 text-center">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-md text-xs mr-2 edit-btn" data-id="${t.id}">Edit</button>
+                            <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-xs delete-btn" data-id="${t.id}">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                // Attach event listeners for edit/delete buttons
+                tbody.querySelectorAll('.edit-btn').forEach(button => {
+                    button.onclick = (e) => editTransaction(e.target.dataset.id);
+                });
+                tbody.querySelectorAll('.delete-btn').forEach(button => {
+                    button.onclick = (e) => deleteTransaction(e.target.dataset.id);
+                });
+            }
+            hideLoading('transactions-loading', 'transactions-list'); // Pass both IDs
+        }
+
+        function editTransaction(id) {
+            const transaction = portfolioTransactions.find(t => t.id === id);
+            if (transaction) {
+                document.getElementById('transactionId').value = transaction.id;
+                document.getElementById('transactionType').value = transaction.transactionType;
+                document.getElementById('ticker').value = transaction.ticker;
+                document.getElementById('quantity').value = transaction.quantity;
+                document.getElementById('price').value = transaction.price;
+                document.getElementById('transactionDate').value = transaction.transactionDate;
+                showMessage("Editing transaction. Modify details and click 'Save Transaction'.");
+            }
+        }
+
+        // --- Core Portfolio Calculation Logic ---
+        function calculateCurrentHoldings() {
+            const holdings = {}; // { ticker: { quantity: X, totalCost: Y, avgCostBasis: Z } }
+
+            portfolioTransactions.forEach(t => {
+                const ticker = t.ticker.toUpperCase();
+                if (!holdings[ticker]) {
+                    holdings[ticker] = { quantity: 0, totalCost: 0, avgCostBasis: 0 };
+                }
+
+                if (t.transactionType === 'Buy' || t.transactionType === 'Carry Over') {
+                    holdings[ticker].quantity += t.quantity;
+                    holdings[ticker].totalCost += t.quantity * t.price;
+                } else if (t.transactionType === 'Sell') {
+                    holdings[ticker].quantity -= t.quantity;
+                    // For simplicity, we'll adjust totalCost proportionally for sells.
+                    // A true FIFO/LIFO would require more complex tracking of individual lots.
+                    if (holdings[ticker].quantity >= 0) {
+                        holdings[ticker].totalCost -= (t.quantity / (holdings[ticker].quantity + t.quantity)) * holdings[ticker].totalCost;
+                    } else {
+                        // If selling more than owned, reset cost to 0 for negative quantity
+                        holdings[ticker].totalCost = 0;
+                    }
+                }
+                holdings[ticker].avgCostBasis = holdings[ticker].quantity > 0 ? holdings[ticker].totalCost / holdings[ticker].quantity : 0;
+            });
+
+            // Filter out holdings with 0 or negative quantity (closed positions)
+            const filteredHoldings = {};
+            for (const ticker in holdings) {
+                if (holdings[ticker].quantity > 0) {
+                    filteredHoldings[ticker] = holdings[ticker];
+                }
+            }
+            return filteredHoldings;
+        }
+
+        function calculateCurrentHoldingsAsOfDate(targetDateString) {
+            const holdings = {};
+            const targetDate = new Date(targetDateString);
+            targetDate.setHours(23, 59, 59, 999); // End of day for target date
+
+            portfolioTransactions.forEach(t => {
+                const transactionDate = new Date(t.transactionDate);
+                if (transactionDate <= targetDate) { // Only consider transactions up to and including the target date
+                    const ticker = t.ticker.toUpperCase();
+                    if (!holdings[ticker]) {
+                        holdings[ticker] = { quantity: 0, totalCost: 0, avgCostBasis: 0 };
+                    }
+
+                    if (t.transactionType === 'Buy' || t.transactionType === 'Carry Over') {
+                        holdings[ticker].quantity += t.quantity;
+                        holdings[ticker].totalCost += t.quantity * t.price;
+                    } else if (t.transactionType === 'Sell') {
+                        holdings[ticker].quantity -= t.quantity;
+                        if (holdings[ticker].quantity >= 0) {
+                            holdings[ticker].totalCost -= (t.quantity / (holdings[ticker].quantity + t.quantity)) * holdings[ticker].totalCost;
+                        } else {
+                            holdings[ticker].totalCost = 0;
+                        }
+                    }
+                    holdings[ticker].avgCostBasis = holdings[ticker].quantity > 0 ? holdings[ticker].totalCost / holdings[ticker].quantity : 0;
+                }
+            });
+
+            const filteredHoldings = {};
+            for (const ticker in holdings) {
+                if (holdings[ticker].quantity > 0) {
+                    filteredHoldings[ticker] = holdings[ticker];
+                }
+            }
+            return filteredHoldings;
+        }
+
+
+        // --- Event Listeners and Initial Setup ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeFirebase(); // Initialize Firebase first
+
+            // Set today's date for date inputs
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('closeDate').value = today;
+            document.getElementById('profitabilityStartDate').value = today;
+            document.getElementById('profitabilityEndDate').value = today;
+            document.getElementById('transactionDate').value = today;
+
+
+            // Tab switching logic
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+
+                    document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+                    const targetTabId = e.target.dataset.tab + '-tab';
+                    document.getElementById(targetTabId).classList.remove('hidden');
+
+                    // Render content for the newly active tab
+                    if (e.target.dataset.tab === 'dynamic') {
+                        renderDynamicView();
+                    } else if (e.target.dataset.tab === 'editor') {
+                        renderPortfolioEditor();
+                    } else if (e.target.dataset.tab === 'daily-close') {
+                        // Default to today's date if selected
+                        const selectedDate = document.getElementById('closeDate').value;
+                        if (selectedDate) renderDailyCloseView(selectedDate);
+                    } else if (e.target.dataset.tab === 'profitability') {
+                         // Initial render, but calculation requires explicit button click
+                         document.getElementById('profitability-results').classList.add('hidden');
+                         document.getElementById('profitability-loading').classList.add('hidden');
+                    } else if (e.target.dataset.tab === 'summary') {
+                        // Summary data is fetched via onSnapshot, so it will update automatically
+                        // No specific render function call needed here unless it's a one-time fetch
+                    }
+                });
+            });
+
+            // Portfolio Form Submission
+            document.getElementById('portfolioForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const transaction = {
+                    id: document.getElementById('transactionId').value || null,
+                    transactionType: document.getElementById('transactionType').value,
+                    ticker: document.getElementById('ticker').value.toUpperCase(),
+                    quantity: parseFloat(document.getElementById('quantity').value),
+                    price: parseFloat(document.getElementById('price').value),
+                    transactionDate: document.getElementById('transactionDate').value,
+                    timestamp: new Date().toISOString() // For internal sorting/tracking
+                };
+                await saveTransaction(transaction);
+                document.getElementById('portfolioForm').reset();
+                document.getElementById('transactionId').value = ''; // Clear ID after save
+                document.getElementById('transactionDate').value = new Date().toISOString().split('T')[0]; // Reset date to today
+            });
+
+            // Clear Form Button
+            document.getElementById('clearForm').addEventListener('click', () => {
+                document.getElementById('portfolioForm').reset();
+                document.getElementById('transactionId').value = '';
+                document.getElementById('transactionDate').value = new Date().toISOString().split('T')[0]; // Reset date to today
+            });
+
+
+            // Daily Close Date Fetch Button
+            document.getElementById('fetchCloseData').addEventListener('click', () => {
+                const selectedDate = document.getElementById('closeDate').value;
+                renderDailyCloseView(selectedDate);
+            });
+
+            // Profitability Calculation Button
+            document.getElementById('calculateProfitability').addEventListener('click', renderProfitabilityTracker);
+
+            // Initial render of Dynamic View
+            renderDynamicView();
+
+            // Set up timed refresh for dynamic view
+            // Clear any existing interval to prevent duplicates on re-initialization
+            if (refreshIntervalId) clearInterval(refreshIntervalId);
+            refreshIntervalId = setInterval(() => {
+                if (document.querySelector('.tab-button.active').dataset.tab === 'dynamic' && isESTTradingHours()) {
+                    renderDynamicView();
+                } else if (!isESTTradingHours()) {
+                    document.getElementById('refreshStatus').textContent = `Current EST: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' })} - Refresh paused (outside 6 AM - 8 PM EST)`;
+                }
+            }, REFRESH_INTERVAL_MS);
+        });
+    </script>
+</body>
+</html>
